@@ -45,6 +45,7 @@ func main() {
 			"--use-fake-device-for-media-stream",
 		},
 	})
+	defer browser.Close()
 	if err != nil {
 		log.Fatalf("Failed to launch browser: %v", err)
 	}
@@ -59,7 +60,7 @@ func main() {
 	// Meeting configuration
 	meetingURL := "https://meet.google.com/fho-nohr-kdg" // Replace with actual meeting link
 	guestName := "clavirion"                             // Set guest name
-	meetingDuration := 10 * time.Minute                  // Set meeting duration
+	// meetingDuration := 10 * time.Minute                  // Set meeting duration
 
 	fmt.Printf("Joining meeting: %s as %s\n", meetingURL, guestName)
 
@@ -82,13 +83,13 @@ func main() {
 	wg.Add(1)
 	go monitorMeetingEnd(page, recordCmd, filepath, &wg)
 	// Set up browser disconnect handler
-	setupDisconnectHandler(browser, recordCmd)
+	// setupDisconnectHandler(browser, recordCmd)
 
 	// Wait for the meeting duration
-	fmt.Printf("Staying in meeting for %v\n", meetingDuration)
+	// fmt.Printf("Staying in meeting for %v\n", meetingDuration)
 	// time.Sleep(meetingDuration)
 
-	fmt.Println("Meeting time completed. Exiting...")
+	// fmt.Println("Meeting time completed. Exiting...")
 	wg.Wait()
 }
 
@@ -155,16 +156,16 @@ func handleButton(page playwright.Page, selector string, buttonName string) bool
 	return true
 }
 
-// setupDisconnectHandler creates a handler for browser disconnects
-func setupDisconnectHandler(browser playwright.Browser, recordCmd *exec.Cmd) {
-	go func() {
-		browser.On("disconnected", func() {
-			fmt.Println("Browser closed unexpectedly. Stopping recording...")
-			recordCmd.Process.Signal(os.Interrupt)
-			recordCmd.Wait()
-		})
-	}()
-}
+// // setupDisconnectHandler creates a handler for browser disconnects
+// func setupDisconnectHandler(browser playwright.Browser, recordCmd *exec.Cmd) {
+// 	go func() {
+// 		browser.On("disconnected", func() {
+// 			fmt.Println("Browser closed unexpectedly. Stopping recording...")
+// 			recordCmd.Process.Signal(os.Interrupt)
+// 			recordCmd.Wait()
+// 		})
+// 	}()
+// }
 
 // startRecording starts the FFmpeg process to record the meeting audio
 func startRecording(filename string) *exec.Cmd {
@@ -231,6 +232,26 @@ func monitorMeetingEnd(page playwright.Page, recordCmd *exec.Cmd, audioFilePath 
 				return
 			}
 
+			// Ensure the transcripts folder exists
+			transcriptFolder := "transcripts"
+			if err := os.MkdirAll(transcriptFolder, os.ModePerm); err != nil {
+				fmt.Println("Error creating transcripts folder:", err)
+				return
+			}
+
+			// Generate the summary file path
+			filename := filepath.Base(audioFilePath)                                           // Extract filename from path
+			transcriptFilePath := filepath.Join(transcriptFolder, filename[:len(filename)-4]+".txt") // Replace .mp3 with .txt
+
+			// Save the summary as a text file
+			err = os.WriteFile(transcriptFilePath, []byte(transcript), 0644)
+			if err != nil {
+				fmt.Println("Error saving summary file:", err)
+				return
+			}
+
+			fmt.Println("Summary saved at:", transcriptFilePath)
+
 			// Summarize the transcription
 			summary, err := ollama.RunOllama(transcript)
 			if err != nil {
@@ -246,7 +267,6 @@ func monitorMeetingEnd(page playwright.Page, recordCmd *exec.Cmd, audioFilePath 
 			}
 
 			// Generate the summary file path
-			filename := filepath.Base(audioFilePath)                                           // Extract filename from path
 			summaryFilePath := filepath.Join(summaryFolder, filename[:len(filename)-4]+".txt") // Replace .mp3 with .txt
 
 			// Save the summary as a text file
@@ -266,17 +286,17 @@ func monitorMeetingEnd(page playwright.Page, recordCmd *exec.Cmd, audioFilePath 
 // stopRecording stops the FFmpeg process properly on Windows
 func stopRecording(recordCmd *exec.Cmd) {
 	fmt.Println("Stopping recording gracefully...")
-	err := recordCmd.Process.Signal(os.Interrupt)
+	recordCmd.Process.Signal(os.Interrupt)
 	if recordCmd.Process != nil {
 		if err := recordCmd.Process.Kill(); err != nil {
-			fmt.Printf("Failed to kill FFmpeg process: %v\n", err)
+			fmt.Printf("Failed to Murder FFmpeg process: %v\n", err)
 		} else {
 			fmt.Println("Recording process killed.")
 		}
 	}
-	if err != nil {
-		log.Printf("Failed to stop recording gracefully: %v", err)
-	}
+	// if err != nil {
+	// 	log.Printf("Failed to stop recording gracefully: %v", err)
+	// }
 
 	// If CTRL+Break doesn't work, force kill the process
 	// fmt.Println("Force stopping recording...")
