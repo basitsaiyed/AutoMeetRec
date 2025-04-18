@@ -20,65 +20,63 @@ const (
 	summaryFolder = "summaries"
 )
 
-func main() {
-	// Generate a unique filename with timestamp
-	filename := fmt.Sprintf("meeting_%s.mp3", time.Now().Format("20060102_150405"))
-	audioFilePath := filepath.Join(recordingFolder, filename)
-	
-	// Ensure recording directory exists
-	if err := os.MkdirAll(recordingFolder, os.ModePerm); err != nil {
-		log.Fatalf("Failed to create recording directory: %v", err)
-	}
+func RunMeetingBot(meetingURL, guestName string) error {
+    // Generate a unique filename with timestamp
+    filename := fmt.Sprintf("meeting_%s.mp3", time.Now().Format("20060102_150405"))
+    audioFilePath := filepath.Join(recordingFolder, filename)
 
-	// Start recording
-	recordCmd := startRecording(audioFilePath)
-	defer stopRecordingGracefully(recordCmd)
+    // Ensure recording directory exists
+    if err := os.MkdirAll(recordingFolder, os.ModePerm); err != nil {
+        return fmt.Errorf("failed to create recording directory: %v", err)
+    }
 
-	// Initialize Playwright
-	pw, err := playwright.Run()
-	if err != nil {
-		log.Fatalf("Failed to start Playwright: %v", err)
-	}
-	defer pw.Stop()
+    // Start recording
+    recordCmd := startRecording(audioFilePath)
+    defer stopRecordingGracefully(recordCmd)
 
-	// Launch browser
-	browser, err := launchBrowser(pw)
-	if err != nil {
-		log.Fatalf("Failed to launch browser: %v", err)
-	}
-	defer browser.Close()
+    // Initialize Playwright
+    pw, err := playwright.Run()
+    if err != nil {
+        return fmt.Errorf("failed to start Playwright: %v", err)
+    }
+    defer pw.Stop()
 
-	// Create new page
-	page, err := browser.NewPage()
-	if err != nil {
-		log.Fatalf("Failed to create page: %v", err)
-	}
+    // Launch browser
+    browser, err := launchBrowser(pw)
+    if err != nil {
+        return fmt.Errorf("failed to launch browser: %v", err)
+    }
+    defer browser.Close()
 
-	// Meeting configuration
-	meetingURL := "https://meet.google.com/mjy-gkio-djs"
-	guestName := "clavirion"
+    // Create new page
+    page, err := browser.NewPage()
+    if err != nil {
+        return fmt.Errorf("failed to create page: %v", err)
+    }
 
-	fmt.Printf("Joining meeting: %s as %s\n", meetingURL, guestName)
+    fmt.Printf("Joining meeting: %s as %s\n", meetingURL, guestName)
 
-	// Navigate to the meeting URL
-	if _, err := page.Goto(meetingURL); err != nil {
-		log.Fatalf("Failed to navigate to meeting URL: %v", err)
-	}
+    // Navigate to the meeting URL
+    if _, err := page.Goto(meetingURL); err != nil {
+        return fmt.Errorf("failed to navigate to meeting URL: %v", err)
+    }
 
-	// Add random delay and simulate human behavior
-	randomDelay(2, 5)
-	simulateHumanBehavior(page)
+    // Add random delay and simulate human behavior
+    randomDelay(2, 5)
+    simulateHumanBehavior(page)
 
-	// Join the meeting
-	if err := joinMeeting(page, guestName); err != nil {
-		log.Printf("Error joining meeting: %v", err)
-	}
+    // Join the meeting
+    if err := joinMeeting(page, guestName); err != nil {
+        log.Printf("Error joining meeting: %v", err)
+    }
 
-	// Wait for meeting to end
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go monitorMeetingEnd(page, recordCmd, audioFilePath, &wg)
-	wg.Wait()
+    // Wait for meeting to end
+    var wg sync.WaitGroup
+    wg.Add(1)
+    go monitorMeetingEnd(page, recordCmd, audioFilePath, &wg)
+    wg.Wait()
+
+    return nil
 }
 
 func launchBrowser(pw *playwright.Playwright) (playwright.Browser, error) {
