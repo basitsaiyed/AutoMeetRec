@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  automeetrec:
+    build: .
+    container_name: automeetrec
+    restart: always
+    volumes:
+      - ./recordings:/app/recordings
+      - ./transcripts:/app/transcripts
+      - ./summaries:/app/summaries
+    environment:
+      - PLAYWRIGHT_BROWSERS_PATH=/root/.cache/ms-playwright
+    privileged: true
