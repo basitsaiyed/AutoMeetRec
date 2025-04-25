@@ -294,11 +294,45 @@ func isPersonInMeeting(page playwright.Page, personEmail string, personName stri
 		}
 	}
 
+	 // Check approach 2: Look at active speaker indicators or other UI elements
+    // This approach works even if we can't open the participants panel
+    activeSpeakerSelectors := []string{
+        // Look for the person's name in active speaker labels
+        `[data-active-speaker-label*="${personName}"]`,
+        // Look for their tile with name label
+        `[aria-label*="${personName}"][role="img"]`,
+        `[aria-label*="${personName}"][role="button"]`,
+        // Look in chat messages (if they sent any)
+        `[data-sender-name*="${personName}"]`,
+    }
+    
+    // Replace template values with actual values
+    for i, selector := range activeSpeakerSelectors {
+        activeSpeakerSelectors[i] = strings.Replace(selector, "${personName}", personName, -1)
+    }
+    
+    // Try each active speaker/participant indicator selector
+    for _, selector := range activeSpeakerSelectors {
+        element := page.Locator(selector)
+        if element != nil {
+            visible, err := element.IsVisible()
+            if err == nil && visible {
+                count, err := element.Count()
+                if err == nil && count > 0 {
+                    return true
+                }
+            }
+        }
+    }
+
 	return false
 }
 
 // openParticipantPanel attempts to open the participants panel if not already open
 func openParticipantPanel(page playwright.Page) {
+	// First, try to dismiss any popups that might be blocking the UI
+    dismissPopups(page)
+
 	// Potential selectors for the participant panel button
 	participantButtonSelectors := []string{
 		`[aria-label="Show everyone"]`,
@@ -335,7 +369,7 @@ func openParticipantPanel(page playwright.Page) {
 				if !panelAlreadyOpen {
 					// Click to open panel
 					if err := button.Click(); err == nil {
-						fmt.Println("Opened participants panel")
+						// fmt.Println("Opened participants panel")
 						// Wait for panel to appear
 						time.Sleep(1 * time.Second)
 						return
@@ -348,6 +382,44 @@ func openParticipantPanel(page playwright.Page) {
 		}
 	}
 }
+
+// dismissPopups handles any popups that might appear during the meeting
+func dismissPopups(page playwright.Page) {
+    // List of common popup dismiss button selectors
+    dismissButtonSelectors := []string{
+        // The "Got it" button from your screenshot
+        `button:has-text("Got it")`,
+        `text="Got it"`,
+        // Other common popup buttons
+        `button:has-text("Dismiss")`,
+        `button:has-text("Close")`,
+        `button:has-text("I understand")`,
+        `button:has-text("No thanks")`,
+        `button:has-text("Skip")`,
+        `button:has-text("Not now")`,
+        // Close icons
+        `[aria-label="Close"]`,
+        `[aria-label="Dismiss"]`,
+    }
+    
+    for _, selector := range dismissButtonSelectors {
+        button := page.Locator(selector)
+        if button != nil {
+            visible, err := button.IsVisible()
+            if err == nil && visible {
+                fmt.Printf("Found popup dismiss button: %s\n", selector)
+                if err := button.Click(); err != nil {
+                    fmt.Printf("Failed to click dismiss button: %v\n", err)
+                } else {
+                    // fmt.Println("Successfully dismissed popup")
+                    // Wait a moment for the popup to disappear
+                    time.Sleep(500 * time.Millisecond)
+                }
+            }
+        }
+    }
+}
+
 
 // leaveCurrentMeeting attempts to exit the meeting gracefully
 func leaveCurrentMeeting(page playwright.Page) {
